@@ -4,21 +4,22 @@ from datetime import date
 
 import pytest
 from habits import core
+from habits.types import Habit, HabitStore, HabitSummary
 
 TODAY = date(2026, 8, 27)
 
 
-def empty_data() -> dict:
-    return {"version": 1, "habits": []}
+def empty_data() -> HabitStore:
+    return HabitStore(version=1, habits=[])
 
 
-def data_with(name: str, completions: list[str]) -> dict:
-    return {
-        "version": 1,
-        "habits": [
-            {"name": name, "created_at": "2026-08-01", "completions": list(completions)}
+def data_with(name: str, completions: list[str]) -> HabitStore:
+    return HabitStore(
+        version=1,
+        habits=[
+            Habit(name=name, created_at="2026-08-01", completions=list(completions))
         ],
-    }
+    )
 
 
 # --- T3: add_habit (RF-1, RF-2, RF-3) ---------------------------------------
@@ -28,12 +29,12 @@ def test_add_habit_creates_it_with_creation_date():
     """RF-1: un nombre nuevo y no vacío crea el hábito."""
     data = core.add_habit(empty_data(), "Estudiar Python", today=TODAY)
 
-    assert data["habits"] == [
-        {
-            "name": "Estudiar Python",
-            "created_at": "2026-08-27",
-            "completions": [],
-        }
+    assert data.habits == [
+        Habit(
+            name="Estudiar Python",
+            created_at="2026-08-27",
+            completions=[],
+        )
     ]
 
 
@@ -41,7 +42,7 @@ def test_add_habit_keeps_the_original_name_for_display():
     """RF-2: se conserva el nombre tal y como lo escribió el usuario."""
     data = core.add_habit(empty_data(), "  Estudiar Python  ", today=TODAY)
 
-    assert data["habits"][0]["name"] == "Estudiar Python"
+    assert data.habits[0].name == "Estudiar Python"
 
 
 def test_add_habit_rejects_duplicate_ignoring_case_and_spaces():
@@ -51,7 +52,7 @@ def test_add_habit_rejects_duplicate_ignoring_case_and_spaces():
     with pytest.raises(core.DuplicateHabitError):
         core.add_habit(data, "  estudiar PYTHON  ", today=TODAY)
 
-    assert len(data["habits"]) == 1
+    assert len(data.habits) == 1
 
 
 @pytest.mark.parametrize("name", ["", "   ", "\t\n"])
@@ -69,7 +70,7 @@ def test_mark_done_registers_the_injected_date():
     data, already_done = core.mark_done(data_with("Leer", []), "Leer", today=TODAY)
 
     assert already_done is False
-    assert data["habits"][0]["completions"] == ["2026-08-27"]
+    assert data.habits[0].completions == ["2026-08-27"]
 
 
 def test_mark_done_is_idempotent():
@@ -78,7 +79,7 @@ def test_mark_done_is_idempotent():
     data, already_done = core.mark_done(data, "Leer", today=TODAY)
 
     assert already_done is True
-    assert data["habits"][0]["completions"] == ["2026-08-27"]
+    assert data.habits[0].completions == ["2026-08-27"]
 
 
 def test_mark_done_keeps_completions_sorted():
@@ -87,7 +88,7 @@ def test_mark_done_keeps_completions_sorted():
         data_with("Leer", ["2026-08-26", "2026-08-25"]), "Leer", today=TODAY
     )
 
-    assert data["habits"][0]["completions"] == [
+    assert data.habits[0].completions == [
         "2026-08-25",
         "2026-08-26",
         "2026-08-27",
@@ -96,10 +97,11 @@ def test_mark_done_keeps_completions_sorted():
 
 def test_mark_done_finds_the_habit_ignoring_case_and_spaces():
     """RF-2: misma normalización de nombres al marcar."""
-    data, _ = core.mark_done(data_with("Estudiar Python", []), "  ESTUDIAR python ",
-                             today=TODAY)
+    data, _ = core.mark_done(
+        data_with("Estudiar Python", []), "  ESTUDIAR python ", today=TODAY
+    )
 
-    assert data["habits"][0]["completions"] == ["2026-08-27"]
+    assert data.habits[0].completions == ["2026-08-27"]
 
 
 def test_mark_done_on_unknown_habit_raises():
@@ -157,25 +159,25 @@ def test_list_habits_is_empty_when_there_are_no_habits():
 
 def test_list_habits_sorts_by_streak_desc_then_name():
     """RF-7: racha descendente y, a igualdad, nombre alfabético."""
-    data = {
-        "version": 1,
-        "habits": [
-            {"name": "Nadar", "created_at": "2026-08-01", "completions": ["2026-08-27"]},
-            {"name": "Correr", "created_at": "2026-08-01", "completions": ["2026-08-27"]},
-            {
-                "name": "Estudiar Python",
-                "created_at": "2026-08-01",
-                "completions": ["2026-08-26", "2026-08-27"],
-            },
-            {"name": "Meditar", "created_at": "2026-08-01", "completions": []},
+    store = HabitStore(
+        version=1,
+        habits=[
+            Habit(name="Nadar", created_at="2026-08-01", completions=["2026-08-27"]),
+            Habit(name="Correr", created_at="2026-08-01", completions=["2026-08-27"]),
+            Habit(
+                name="Estudiar Python",
+                created_at="2026-08-01",
+                completions=["2026-08-26", "2026-08-27"],
+            ),
+            Habit(name="Meditar", created_at="2026-08-01", completions=[]),
         ],
-    }
+    )
 
-    assert core.list_habits(data, today=TODAY) == [
-        {"name": "Estudiar Python", "streak": 2},
-        {"name": "Correr", "streak": 1},
-        {"name": "Nadar", "streak": 1},
-        {"name": "Meditar", "streak": 0},
+    assert core.list_habits(store, today=TODAY) == [
+        HabitSummary(name="Estudiar Python", streak=2),
+        HabitSummary(name="Correr", streak=1),
+        HabitSummary(name="Nadar", streak=1),
+        HabitSummary(name="Meditar", streak=0),
     ]
 
 

@@ -5,32 +5,34 @@ from pathlib import Path
 
 import pytest
 from habits import storage
+from habits.types import Habit, HabitStore
 
 
 def test_load_missing_file_returns_empty_structure(tmp_path):
     """RF-9: si el archivo no existe, se parte de una estructura vacía."""
-    data = storage.load(tmp_path / "habits.json")
+    store = storage.load(tmp_path / "habits.json")
 
-    assert data == {"version": 1, "habits": []}
+    assert store == HabitStore(version=1, habits=[])
 
 
 def test_save_then_load_roundtrip(tmp_path):
     """RF-9: lo guardado se recupera intacto y el JSON es legible."""
     path = tmp_path / "sub" / "habits.json"
-    data = {
-        "version": 1,
-        "habits": [
-            {
-                "name": "Estudiar Python",
-                "created_at": "2026-08-27",
-                "completions": ["2026-08-27"],
-            }
+    store = HabitStore(
+        version=1,
+        habits=[
+            Habit(
+                name="Estudiar Python",
+                created_at="2026-08-27",
+                completions=["2026-08-27"],
+            )
         ],
-    }
+    )
 
-    storage.save(path, data)
+    storage.save(path, store)
 
-    assert storage.load(path) == data
+    loaded = storage.load(path)
+    assert loaded == store
     text = path.read_text(encoding="utf-8")
     assert "Estudiar Python" in text  # sin escapes ilegibles
     assert "\n" in text  # indentado, no una sola línea

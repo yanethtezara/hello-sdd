@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from habits.types import Habit, HabitStore
+
 VERSION = 1
 
 
@@ -18,31 +20,85 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def default_path() -> Path:
-    """Ruta del único archivo de datos: ``habits.json`` en la raíz del proyecto.
-
-    Se resuelve a partir de la ubicación del paquete, no del directorio de
-    trabajo, para que la CLI encuentre siempre los mismos datos se ejecute
-    desde donde se ejecute.
-    """
+    """Ruta del único archivo de datos: ``habits.json`` en la raíz del proyecto."""
     return PROJECT_ROOT / "habits.json"
 
 
-def empty_data() -> dict[str, Any]:
+def empty_store() -> HabitStore:
     """Estructura inicial cuando todavía no hay archivo."""
-    return {"version": VERSION, "habits": []}
+    return HabitStore(version=VERSION, habits=[])
 
 
-def load(path: Path) -> dict[str, Any]:
-    """Lee el archivo de datos.
+def empty_data() -> HabitStore:
+    """Alias para retrocompatibilidad con la API de almacenamiento."""
+    return empty_store()
 
-    Si no existe, devuelve una estructura vacía (RF-9). Si existe pero no es
-    JSON válido o no tiene la forma esperada, lanza ``StorageError`` y no
-    escribe nada (RF-11).
+
+def _dict_to_store(data: dict[str, Any], path: Path | None = None) -> HabitStore:
+    """Convierte un diccionario JSON validado a HabitStore.
+
+    Lanza StorageError si la estructura no es la esperada.
+    """
+    path_str = f"{path}: " if path else ""
+    if not isinstance(data, dict) or not isinstance(data.get("habits"), list):
+        raise StorageError(f"{path_str}no tiene la estructura esperada.")
+
+    version = data.get("version", VERSION)
+    if not isinstance(version, int):
+        raise StorageError(f"{path_str}no tiene la estructura esperada.")
+
+    habits: list[Habit] = []
+    for item in data["habits"]:
+        if (
+            not isinstance(item, dict)
+            or "name" not in item
+            or "created_at" not in item
+        ):
+            raise StorageError(f"{path_str}no tiene la estructura esperada.")
+
+        name = item["name"]
+        created_at = item["created_at"]
+        completions = item.get("completions", [])
+
+        if (
+            not isinstance(name, str)
+            or not isinstance(created_at, str)
+            or not isinstance(completions, list)
+        ):
+            raise StorageError(f"{path_str}no tiene la estructura esperada.")
+
+        habits.append(
+            Habit(name=name, created_at=created_at, completions=list(completions))
+        )
+
+    return HabitStore(version=version, habits=habits)
+
+
+def _store_to_dict(store: HabitStore) -> dict[str, Any]:
+    """Convierte HabitStore a un diccionario legible para serialización JSON."""
+    return {
+        "version": store.version,
+        "habits": [
+            {
+                "name": habit.name,
+                "created_at": habit.created_at,
+                "completions": list(habit.completions),
+            }
+            for habit in store.habits
+        ],
+    }
+
+
+def load(path: Path) -> HabitStore:
+    """Lee el archivo de datos y devuelve un objeto HabitStore.
+
+    Si no existe, devuelve una estructura vacía. Si existe pero no es
+    JSON válido o no tiene la forma esperada, lanza ``StorageError``.
     """
     try:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return empty_data()
+        return empty_store()
     except OSError as error:
         raise StorageError(f"No se pudo leer {path}: {error}") from error
 
@@ -51,21 +107,20 @@ def load(path: Path) -> dict[str, Any]:
     except json.JSONDecodeError as error:
         raise StorageError(f"{path} no contiene JSON válido: {error}") from error
 
-    if not isinstance(data, dict) or not isinstance(data.get("habits"), list):
-        raise StorageError(f"{path} no tiene la estructura esperada.")
-
-    return data
+    return _dict_to_store(data, path=path)
 
 
-def save(path: Path, data: dict[str, Any]) -> None:
-    """Escribe el archivo completo, legible por humanos (RF-9).
-
-    Se escribe primero un temporal y luego se reemplaza, para no dejar el
-    archivo a medias si algo falla durante la escritura.
-    """
+def save(path: Path, store: HabitStore | dict[str, Any]) -> None:
+    """Escribe el objeto HabitStore completo en formato JSON legible."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
-    text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+    if isinstance(store, dict):
+        data_dict = store
+    else:
+        data_dict = _store_to_dict(store)
+
+    text = json.dumps(data_dict, indent=2, ensure_ascii=False) + "\n"
 
     try:
         temporary.write_text(text, encoding="utf-8")

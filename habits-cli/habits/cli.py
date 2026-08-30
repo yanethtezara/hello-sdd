@@ -13,6 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from habits import core, storage
+from habits.types import HabitStore
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -49,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _cmd_add(data: dict, name: str, today: date) -> tuple[int, bool]:
+def _cmd_add(data: HabitStore, name: str, today: date) -> tuple[int, bool]:
     try:
         core.add_habit(data, name, today=today)
     except core.EmptyNameError:
@@ -63,7 +64,7 @@ def _cmd_add(data: dict, name: str, today: date) -> tuple[int, bool]:
     return EXIT_OK, True
 
 
-def _cmd_done(data: dict, name: str, today: date) -> tuple[int, bool]:
+def _cmd_done(data: HabitStore, name: str, today: date) -> tuple[int, bool]:
     try:
         _, already_done = core.mark_done(data, name, today=today)
     except core.HabitNotFoundError as error:
@@ -74,29 +75,26 @@ def _cmd_done(data: dict, name: str, today: date) -> tuple[int, bool]:
         )
         return EXIT_ERROR, False
 
-    habit = next(
-        habit
-        for habit in data["habits"]
-        if core.normalize(habit["name"]) == core.normalize(name)
-    )
-    current = core.streak(habit["completions"], today=today)
+    habit = data.find_habit(name)
+    assert habit is not None
+    current = habit.streak(today=today)
 
     if already_done:
-        print(f'"{habit["name"]}" ya estaba hecho hoy (racha: {_days(current)}).')
+        print(f'"{habit.name}" ya estaba hecho hoy (racha: {_days(current)}).')
     else:
-        print(f'¡Hecho! "{habit["name"]}" completado hoy (racha: {_days(current)}).')
+        print(f'¡Hecho! "{habit.name}" completado hoy (racha: {_days(current)}).')
     return EXIT_OK, not already_done
 
 
-def _cmd_list(data: dict, today: date) -> tuple[int, bool]:
+def _cmd_list(data: HabitStore, today: date) -> tuple[int, bool]:
     rows = core.list_habits(data, today=today)
     if not rows:
         print('Todavía no tienes hábitos. Crea el primero con: habits add "nombre"')
         return EXIT_OK, False
 
-    width = max(len(row["name"]) for row in rows)
+    width = max(len(row.name) for row in rows)
     for row in rows:
-        print(f'{row["name"]:<{width}}  racha: {_days(row["streak"])}')
+        print(f'{row.name:<{width}}  racha: {_days(row.streak)}')
     return EXIT_OK, False
 
 
