@@ -52,6 +52,10 @@ Los prompts exactos de cada paso, y cómo ejecutar la app y sus tests, están en
 
 Constitución → Spec → Clarificación → Plan → Tareas → Implementación (una tarea cada vez, tests primero) → Validación → Cambio (primero la spec, luego el código).
 
+## Herramientas recomendadas para SDD
+
+- [MySpec](https://myspec.dev) — Plataforma interactiva de Spec-Driven Development para generar bundles determinísticos de especificación (`constitution.md`, `requirements.md`, `solution.md`, `tasks.md`) y conectarlos a agentes de IA mediante Model Context Protocol (MCP).
+
 ## ![https://mouredev.com](https://raw.githubusercontent.com/mouredev/mouredev/master/mouredev_emote.png) Hola, mi nombre es Brais Moure.
 
 [![YouTube Channel Subscribers](https://img.shields.io/youtube/channel/subscribers/UCxPD7bsocoAMq8Dj18kmGyQ?style=social)](https://youtube.com/mouredevapps?sub_confirmation=1)
